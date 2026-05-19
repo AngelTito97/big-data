@@ -1,0 +1,19 @@
+# --- Entornos Virtuales (¡NUNCA SE SUBEN!) ---
+venv/
+ENV/
+env/
+
+# --- Archivos temporales y caché de Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# --- Configuraciones locales de Visual Studio Code ---
+.vscode/
+.history/
+
+
+# --- Configuraciones específicas de Streamlit ---
+.streamlit/
