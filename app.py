@@ -3,73 +3,112 @@ import joblib
 import numpy as np
 import pandas as pd
 
-# 1. Configuración de la página
-st.set_page_config(page_title="Predictor de Arrestos Chicago", page_icon="🚓", layout="centered")
+# 1. Configuración de la página (layout ancho para acomodar más campos)
+st.set_page_config(page_title="Predictor de Arrestos Chicago", page_icon="🚓", layout="wide")
 
 st.title("🚓 Sistema Predictivo de Arrestos (KDD)")
 st.write("Modelo de Ensamble Híbrido (LightGBM + Red Neuronal) optimizado para la Policía de Chicago.")
 
-# 2. Cargar los modelos en caché (para que no se recarguen cada vez que haces clic)
+# 2. Cargar los modelos y el preprocesador en caché
 @st.cache_resource
-def cargar_modelos():
-    lgbm = joblib.load('modelo_lightgbm_optimizado.pkl')
-    mlp = joblib.load('modelo_mlp_optimizado.pkl')
-    return lgbm, mlp
+def cargar_componentes():
+    lgbm = joblib.load('modelo_lightgbm_optimizado (1).pkl')
+    mlp = joblib.load('modelo_mlp_optimizado (1).pkl')
+    transformador = joblib.load('preprocesador_chicago (1).pkl')
+    return lgbm, mlp, transformador
 
 try:
-    modelo_lgbm, modelo_mlp = cargar_modelos()
-    st.success("Modelos cargados correctamente en memoria.")
+    modelo_lgbm, modelo_mlp, preprocessor = cargar_componentes()
+    st.success("Componentes del modelo cargados correctamente en memoria.")
 except Exception as e:
-    st.error(f"Error al cargar los modelos. Verifica que los archivos .pkl estén en la misma carpeta. Detalle: {e}")
+    st.error(f"Error al cargar los componentes. Verifica que los archivos .pkl estén en la misma carpeta. Detalle: {e}")
     st.stop()
 
-# 3. Interfaz para capturar los datos del usuario (Simulación)
+# 3. Interfaz para capturar los datos del usuario (Diseño en 3 columnas)
+# 3. Interfaz Minimalista (Solo pedimos 4 cosas)
 st.markdown("### 📍 Ingresar Datos del Incidente")
 
-# Nota: Aquí debes pedir las variables exactas que usaste en tu entrenamiento
 col1, col2 = st.columns(2)
 
 with col1:
     latitud = st.number_input("Latitud", value=41.8781, format="%.4f")
-    hora = st.slider("Hora del día (0-23)", min_value=0, max_value=23, value=12)
+    longitud = st.number_input("Longitud", value=-87.6298, format="%.4f")
 
 with col2:
-    longitud = st.number_input("Longitud", value=-87.6298, format="%.4f")
-    tipo_crimen = st.selectbox("Tipo de Crimen (Ejemplo)", ["NARCOTICS", "THEFT", "BATTERY", "ASSAULT"])
-
+    hora = st.slider("Hora del día", min_value=0, max_value=23, value=12)
+    tipo_crimen = st.selectbox(
+    "Tipo de Crimen (Primary Type)", 
+    [
+        "THEFT", 
+        "BATTERY", 
+        "NARCOTICS", 
+        "ASSAULT", 
+        "CRIMINAL DAMAGE", 
+        "BURGLARY", 
+        "ROBBERY", 
+        "MOTOR VEHICLE THEFT", 
+        "DECEPTIVE PRACTICE", 
+        "WEAPONS VIOLATION",
+        "HOMICIDE"
+    ]
+)
 st.markdown("---")
 
-# 4. Botón de Predicción y Lógica del Ensamble Híbrido
+# 4. Botón de Predicción y Lógica
 if st.button("🔮 Predecir Probabilidad de Arresto"):
     
-    # ─── MOCK PIPELINE DE PRODUCCIÓN ───
-    # En un sistema real, aquí cargaríamos el 'encoder.pkl' de Colab.
-    # Para que tu interfaz funcione hoy mismo, calculamos un multiplicador de riesgo:
-    
-    riesgo_base = 0.4418  # Tu número atrapado actual
-    
-    # Simular impacto del tipo de crimen en el arresto
-    impacto_crimen = 0.25 if tipo_crimen == "NARCOTICS" else (0.05 if tipo_crimen == "BATTERY" else -0.15)
-    
-    # Simular impacto de la hora (más arrestos en flagrancia nocturna/tarde)
-    impacto_hora = 0.08 if (18 <= hora <= 23 or 0 <= hora <= 4) else -0.02
-    
-    # Fusionar las variables reales de la pantalla en la probabilidad final
-    proba_final = riesgo_base + impacto_crimen + impacto_hora
-    proba_final = max(0.01, min(0.99, proba_final)) # Asegurar rango entre 1% y 99%
-    
-    probabilidad_porcentaje = proba_final * 100
-    
-    # Aplicación de tu Umbral Óptimo de Youden
-    umbral_optimo = 0.5312
-    prediccion_final = 1 if proba_final >= umbral_optimo else 0
-    
-    # 5. Mostrar Resultados Visuales Dinámicos
-    st.markdown("### 📊 Resultado de la Inferencia")
-    
-    if prediccion_final == 1:
-        st.error(f"🚨 ALTA PROBABILIDAD DE ARRESTO ({probabilidad_porcentaje:.2f}%)")
-        st.write(f"El sistema sugiere despachar unidades. Supera el umbral operativo óptimo de {umbral_optimo*100:.2f}%.")
-    else:
-        st.warning(f"⚠️ BAJA PROBABILIDAD DE ARRESTO ({probabilidad_porcentaje:.2f}%)")
-        st.write(f"No se anticipa un arresto inmediato en la escena. Queda por debajo del umbral operativo.")
+    try:
+        # --- RELLENO AUTOMÁTICO (Back-end) ---
+        # Estas variables NO se piden en pantalla, el sistema las asume por defecto
+        # Usamos los valores más comunes (Moda/Mediana) de Chicago
+        mes_fijo = 6  # Asumimos que es Junio
+        dia_semana_fijo = 4  # Asumimos que es Viernes (0=Lunes, 4=Viernes)
+        periodo_dia_fijo = "Afternoon"
+        fbi_code_fijo = "06" # Código común de robo
+        loc_desc_fijo = "STREET" # La mayoría ocurre en la calle
+        distrito_fijo = 11
+        comunidad_fija = 25
+        ward_fijo = 28
+        x_coordinate = 1100000.0
+        y_coordinate = 1900000.0
+        
+        # --- CONSTRUIR EL DATAFRAME EXACTO ---
+        datos_crudos = pd.DataFrame([{
+            'Latitude': latitud,               # Viene de la pantalla
+            'Longitude': longitud,             # Viene de la pantalla
+            'Hour': hora,                      # Viene de la pantalla
+            'Primary Type': tipo_crimen,       # Viene de la pantalla
+            
+            'FBI Code': fbi_code_fijo,         # Relleno automático
+            'Day_Period': periodo_dia_fijo,    # Relleno automático
+            'DayOfWeek': dia_semana_fijo,      # Relleno automático
+            'X Coordinate': x_coordinate,      # Relleno automático
+            'Month': mes_fijo,                 # Relleno automático
+            'Y Coordinate': y_coordinate,      # Relleno automático
+            'Location Description': loc_desc_fijo, # Relleno automático
+            'Community Area': comunidad_fija,  # Relleno automático
+            'District': distrito_fijo,         # Relleno automático
+            'Ward': ward_fijo                  # Relleno automático
+        }])
+        
+        # TRADUCCIÓN E INFERENCIA
+        X_nuevo_proc = preprocessor.transform(datos_crudos)
+        
+        # (Aquí sigue tu código de predicción igual que siempre...)
+        proba_lgb = modelo_lgbm.predict_proba(X_nuevo_proc)[:, 1]
+        proba_mlp = modelo_mlp.predict_proba(X_nuevo_proc)[:, 1]
+        
+        proba_ensamble = (proba_lgb + proba_mlp) / 2.0
+        probabilidad_porcentaje = proba_ensamble[0] * 100
+        
+        umbral_optimo = 0.5312
+        prediccion_final = 1 if proba_ensamble[0] >= umbral_optimo else 0
+        
+        # Resultados...
+        if prediccion_final == 1:
+            st.error(f"🚨 ALTA PROBABILIDAD DE ARRESTO ({probabilidad_porcentaje:.2f}%)")
+        else:
+            st.warning(f"⚠️ BAJA PROBABILIDAD DE ARRESTO ({probabilidad_porcentaje:.2f}%)")
+            
+    except Exception as e:
+        st.error(f"Error técnico: {e}")
